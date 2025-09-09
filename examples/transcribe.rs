@@ -1,7 +1,11 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use transcribe_rs::{engines::parakeet::ParakeetEngine, engines::whisper::WhisperEngine, TranscriptionEngine};
+use transcribe_rs::{
+    engines::parakeet::{ParakeetEngine, ParakeetParams, TimestampGranularity},
+    engines::whisper::WhisperEngine,
+    TranscriptionEngine,
+};
 
 fn get_audio_duration(path: &PathBuf) -> Result<f64, Box<dyn std::error::Error>> {
     let mut reader = hound::WavReader::open(path)?;
@@ -81,7 +85,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("Transcribing file: {:?}", wav_path);
             let transcribe_start = Instant::now();
-            let result = engine.transcribe_file(&wav_path, None)?;
+
+            // Configure Parakeet parameters with timestamp granularity
+            let params = ParakeetParams {
+                timestamp_granularity: TimestampGranularity::Segment, // Options: Token, Word, Segment
+                ..Default::default()
+            };
+
+            let result = engine.transcribe_file(&wav_path, Some(params))?;
             let transcribe_duration = transcribe_start.elapsed();
             println!("Transcription completed in {:.2?}", transcribe_duration);
 
