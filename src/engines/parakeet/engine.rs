@@ -1,5 +1,5 @@
 use crate::{
-    parakeet_engine::ParakeetModel, ModelInfo, TranscriptionEngine, TranscriptionResult,
+    engines::parakeet::model::ParakeetModel, ModelInfo, TranscriptionEngine, TranscriptionResult,
     TranscriptionSegment,
 };
 use std::path::PathBuf;

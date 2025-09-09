@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use transcribe_rs::{parakeet::ParakeetEngine, whisper::WhisperEngine, TranscriptionEngine};
+use transcribe_rs::{engines::parakeet::ParakeetEngine, engines::whisper::WhisperEngine, TranscriptionEngine};
 
 fn get_audio_duration(path: &PathBuf) -> Result<f64, Box<dyn std::error::Error>> {
     let mut reader = hound::WavReader::open(path)?;
