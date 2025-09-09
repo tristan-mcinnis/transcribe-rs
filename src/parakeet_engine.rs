@@ -47,9 +47,9 @@ pub struct ParakeetModel {
 
 impl ParakeetModel {
     pub fn new<P: AsRef<Path>>(model_dir: P) -> Result<Self, ParakeetError> {
-        let encoder = Self::init_encoder_session(&model_dir)?;
-        let decoder_joint = Self::init_decoder_joint_session(&model_dir)?;
-        let preprocessor = Self::init_preprocessor_session(&model_dir)?;
+        let encoder = Self::init_session(&model_dir, "encoder-model", None, true)?;
+        let decoder_joint = Self::init_session(&model_dir, "decoder_joint-model", None, true)?;
+        let preprocessor = Self::init_session(&model_dir, "nemo128", None, false)?;
 
         let (vocab, blank_idx) = Self::load_vocab(&model_dir)?;
         let vocab_size = vocab.len();
@@ -69,6 +69,60 @@ impl ParakeetModel {
             vocab_size,
             max_tokens_per_step: 10,
         })
+    }
+
+    fn init_session<P: AsRef<Path>>(
+        model_dir: P,
+        model_name: &str,
+        intra_threads: Option<usize>,
+        try_quantized: bool,
+    ) -> Result<Session, ParakeetError> {
+        let providers = vec![CPUExecutionProvider::default().build()];
+
+        // Try quantized version first if requested, fallback to regular version
+        let model_filename = if try_quantized {
+            let quantized_name = format!("{}.int8.onnx", model_name);
+            let quantized_path = model_dir.as_ref().join(&quantized_name);
+            if quantized_path.exists() {
+                log::info!("Loading quantized model from {}...", quantized_name);
+                quantized_name
+            } else {
+                let regular_name = format!("{}.onnx", model_name);
+                log::info!(
+                    "Quantized model not found, loading regular model from {}...",
+                    regular_name
+                );
+                regular_name
+            }
+        } else {
+            let regular_name = format!("{}.onnx", model_name);
+            log::info!("Loading model from {}...", regular_name);
+            regular_name
+        };
+
+        let mut builder = Session::builder()?
+            .with_optimization_level(GraphOptimizationLevel::Level3)?
+            .with_execution_providers(providers)?
+            .with_parallel_execution(true)?;
+
+        if let Some(threads) = intra_threads {
+            builder = builder
+                .with_intra_threads(threads)?
+                .with_inter_threads(threads)?;
+        }
+
+        let session = builder.commit_from_file(model_dir.as_ref().join(&model_filename))?;
+
+        for input in &session.inputs {
+            log::info!(
+                "Model '{}' input: name={}, type={:?}",
+                model_filename,
+                input.name,
+                input.input_type
+            );
+        }
+
+        Ok(session)
     }
 
     fn load_vocab<P: AsRef<Path>>(model_dir: P) -> Result<(Vec<String>, i32), ParakeetError> {
@@ -107,87 +161,6 @@ impl ParakeetModel {
         })? as i32;
 
         Ok((vocab, blank_idx))
-    }
-
-    fn init_encoder_session<P: AsRef<Path>>(model_dir: P) -> Result<Session, ParakeetError> {
-        let encoder_model_name = "encoder-model.int8.onnx";
-        let providers = vec![CPUExecutionProvider::default().build()];
-
-        log::info!("Loading encoder model from {}...", encoder_model_name);
-        let encoder = Session::builder()
-            .unwrap()
-            .with_optimization_level(GraphOptimizationLevel::Level3)?
-            .with_execution_providers(providers)?
-            .with_parallel_execution(true)?
-            .with_intra_threads(4)?
-            .with_inter_threads(4)?
-            .commit_from_file(model_dir.as_ref().join(encoder_model_name))?;
-
-        for input in &encoder.inputs {
-            log::info!(
-                "Encoder input: name={}, type={:?}",
-                input.name,
-                input.input_type
-            );
-        }
-
-        Ok(encoder)
-    }
-
-    fn init_decoder_joint_session<P: AsRef<Path>>(model_dir: P) -> Result<Session, ParakeetError> {
-        let decoder_joint_model_name = "decoder_joint-model.int8.onnx";
-        let providers = vec![CPUExecutionProvider::default().build()];
-
-        log::info!(
-            "Loading decoder joint model from {}...",
-            decoder_joint_model_name
-        );
-        let decoder_joint = Session::builder()
-            .unwrap()
-            .with_optimization_level(GraphOptimizationLevel::Level3)?
-            .with_execution_providers(providers)?
-            .with_parallel_execution(true)?
-            // .with_intra_threads(4)?
-            // .with_inter_threads(4)?
-            .commit_from_file(model_dir.as_ref().join(decoder_joint_model_name))?;
-
-        for input in &decoder_joint.inputs {
-            log::info!(
-                "Decoder joint input: name={}, type={:?}",
-                input.name,
-                input.input_type
-            );
-        }
-
-        Ok(decoder_joint)
-    }
-
-    fn init_preprocessor_session<P: AsRef<Path>>(model_dir: P) -> Result<Session, ParakeetError> {
-        let preprocessor_model_name = "nemo128.onnx";
-        let providers = vec![CPUExecutionProvider::default().build()];
-
-        log::info!(
-            "Loading preprocessor model from {}...",
-            preprocessor_model_name
-        );
-        let preprocessor = Session::builder()
-            .unwrap()
-            .with_optimization_level(GraphOptimizationLevel::Level3)?
-            .with_execution_providers(providers)?
-            .with_parallel_execution(true)?
-            // .with_intra_threads(4)?
-            // .with_inter_threads(4)?
-            .commit_from_file(model_dir.as_ref().join(preprocessor_model_name))?;
-
-        for input in &preprocessor.inputs {
-            log::info!(
-                "Preprocessor input: name={}, type={:?}",
-                input.name,
-                input.input_type
-            );
-        }
-
-        Ok(preprocessor)
     }
 
     pub fn preprocess(
