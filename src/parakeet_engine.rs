@@ -21,41 +21,14 @@ pub struct TimestampedResult {
     pub tokens: Vec<String>,
 }
 
-#[derive(Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum ParakeetError {
-    OrtError(ort::Error),
-    IoError(std::io::Error),
-    ShapeError(ndarray::ShapeError),
-}
-
-impl std::fmt::Display for ParakeetError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ParakeetError::OrtError(e) => write!(f, "ORT Error: {}", e),
-            ParakeetError::IoError(e) => write!(f, "IO Error: {}", e),
-            ParakeetError::ShapeError(e) => write!(f, "Shape Error: {}", e),
-        }
-    }
-}
-
-impl std::error::Error for ParakeetError {}
-
-impl From<ort::Error> for ParakeetError {
-    fn from(e: ort::Error) -> Self {
-        ParakeetError::OrtError(e)
-    }
-}
-
-impl From<std::io::Error> for ParakeetError {
-    fn from(e: std::io::Error) -> Self {
-        ParakeetError::IoError(e)
-    }
-}
-
-impl From<ndarray::ShapeError> for ParakeetError {
-    fn from(e: ndarray::ShapeError) -> Self {
-        ParakeetError::ShapeError(e)
-    }
+    #[error("ORT error")]
+    Ort(#[from] ort::Error),
+    #[error("I/O error")]
+    Io(#[from] std::io::Error),
+    #[error("ndarray shape error")]
+    Shape(#[from] ndarray::ShapeError),
 }
 
 pub struct ParakeetModel {
@@ -120,7 +93,7 @@ impl ParakeetModel {
             .collect();
 
         let blank_idx = tokens.get("<blk>").copied().ok_or_else(|| {
-            ParakeetError::IoError(std::io::Error::new(
+            ParakeetError::Io(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "Missing <blk> token in vocabulary",
             ))

@@ -104,7 +104,7 @@ impl TranscriptionEngine for WhisperEngine {
         let whisper_params = params.unwrap_or_default();
 
         let mut full_params = FullParams::new(SamplingStrategy::BeamSearch {
-            beam_size: 5,
+            beam_size: 3,
             patience: -1.0,
         });
         full_params.set_language(whisper_params.language.as_deref());
