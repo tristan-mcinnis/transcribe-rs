@@ -15,8 +15,8 @@ pub type DecoderState = (Array3<f32>, Array3<f32>);
 const SUBSAMPLING_FACTOR: usize = 8;
 const WINDOW_SIZE: f32 = 0.01;
 
-static DECODE_SPACE_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\A\s|\s\B|(\s)\b").expect("invalid decode-space regex"));
+static DECODE_SPACE_RE: Lazy<Result<Regex, regex::Error>> =
+    Lazy::new(|| Regex::new(r"\A\s|\s\B|(\s)\b"));
 
 #[derive(Debug, Clone)]
 pub struct TimestampedResult {
@@ -33,6 +33,12 @@ pub enum ParakeetError {
     Io(#[from] std::io::Error),
     #[error("ndarray shape error")]
     Shape(#[from] ndarray::ShapeError),
+    #[error("Model input not found: {0}")]
+    InputNotFound(String),
+    #[error("Model output not found: {0}")]
+    OutputNotFound(String),
+    #[error("Failed to get tensor shape for input: {0}")]
+    TensorShape(String),
 }
 
 pub struct ParakeetModel {
@@ -134,7 +140,7 @@ impl ParakeetModel {
         let mut blank_idx: Option<usize> = None;
 
         for line in content.lines() {
-            let parts: Vec<&str> = line.strip_suffix('\n').unwrap_or(line).split(' ').collect();
+            let parts: Vec<&str> = line.trim_end().split(' ').collect();
             if parts.len() >= 2 {
                 let token = parts[0].to_string();
                 if let Ok(id) = parts[1].parse::<usize>() {
@@ -175,8 +181,14 @@ impl ParakeetModel {
         ];
         let outputs = self.preprocessor.run(inputs)?;
 
-        let features = outputs.get("features").unwrap().try_extract_array()?;
-        let features_lens = outputs.get("features_lens").unwrap().try_extract_array()?;
+        let features = outputs
+            .get("features")
+            .ok_or_else(|| ParakeetError::OutputNotFound("features".to_string()))?
+            .try_extract_array()?;
+        let features_lens = outputs
+            .get("features_lens")
+            .ok_or_else(|| ParakeetError::OutputNotFound("features_lens".to_string()))?
+            .try_extract_array()?;
 
         Ok((features.to_owned(), features_lens.to_owned()))
     }
@@ -193,10 +205,13 @@ impl ParakeetModel {
         ];
         let outputs = self.encoder.run(inputs)?;
 
-        let encoder_output = outputs.get("outputs").unwrap().try_extract_array()?;
+        let encoder_output = outputs
+            .get("outputs")
+            .ok_or_else(|| ParakeetError::OutputNotFound("outputs".to_string()))?
+            .try_extract_array()?;
         let encoded_lengths = outputs
             .get("encoded_lengths")
-            .unwrap()
+            .ok_or_else(|| ParakeetError::OutputNotFound("encoded_lengths".to_string()))?
             .try_extract_array()?;
 
         let encoder_output = encoder_output.permuted_axes(IxDyn(&[0, 2, 1]));
@@ -204,25 +219,25 @@ impl ParakeetModel {
         Ok((encoder_output.to_owned(), encoded_lengths.to_owned()))
     }
 
-    pub fn create_decoder_state(&self) -> DecoderState {
+    pub fn create_decoder_state(&self) -> Result<DecoderState, ParakeetError> {
         // Get input shapes from decoder model
         let inputs = &self.decoder_joint.inputs;
 
         let state1_shape = inputs
             .iter()
             .find(|input| input.name == "input_states_1")
-            .expect("input_states_1 not found")
+            .ok_or_else(|| ParakeetError::InputNotFound("input_states_1".to_string()))?
             .input_type
             .tensor_shape()
-            .expect("Failed to get tensor shape for input_states_2");
+            .ok_or_else(|| ParakeetError::TensorShape("input_states_1".to_string()))?;
 
         let state2_shape = inputs
             .iter()
             .find(|input| input.name == "input_states_2")
-            .expect("input_states_2 not found")
+            .ok_or_else(|| ParakeetError::InputNotFound("input_states_2".to_string()))?
             .input_type
             .tensor_shape()
-            .expect("Failed to get tensor shape for input_states_2");
+            .ok_or_else(|| ParakeetError::TensorShape("input_states_2".to_string()))?;
 
         // Create zero states with batch_size=1
         // Shape is [2, -1, 640] so we use [2, 1, 640] for batch_size=1
@@ -238,7 +253,7 @@ impl ParakeetModel {
             state2_shape[2] as usize,
         ));
 
-        (state1, state2)
+        Ok((state1, state2))
     }
 
     pub fn decode_step(
@@ -270,7 +285,10 @@ impl ParakeetModel {
 
         let outputs = self.decoder_joint.run(inputs)?;
 
-        let logits = outputs.get("outputs").unwrap().try_extract_array()?;
+        let logits = outputs
+            .get("outputs")
+            .ok_or_else(|| ParakeetError::OutputNotFound("outputs".to_string()))?
+            .try_extract_array()?;
         log::trace!(
             "Logits shape: {:?}, vocab_size: {}",
             logits.shape(),
@@ -278,11 +296,11 @@ impl ParakeetModel {
         );
         let state1 = outputs
             .get("output_states_1")
-            .unwrap()
+            .ok_or_else(|| ParakeetError::OutputNotFound("output_states_1".to_string()))?
             .try_extract_array()?;
         let state2 = outputs
             .get("output_states_2")
-            .unwrap()
+            .ok_or_else(|| ParakeetError::OutputNotFound("output_states_2".to_string()))?
             .try_extract_array()?;
 
         // Squeeze outputs like Python (remove batch dimension)
@@ -322,7 +340,7 @@ impl ParakeetModel {
         encodings: &ArrayViewD<f32>, // [time_steps, 1024]
         encodings_len: usize,
     ) -> Result<(Vec<i32>, Vec<usize>), ParakeetError> {
-        let mut prev_state = self.create_decoder_state();
+        let mut prev_state = self.create_decoder_state()?;
         let mut tokens = Vec::new();
         let mut timestamps = Vec::new();
 
@@ -339,6 +357,12 @@ impl ParakeetModel {
             // For TDT models, split output into vocab logits and duration logits
             // output[:vocab_size] = vocabulary logits
             // output[vocab_size:] = duration logits
+            let vocab_logits_slice = probs.as_slice().ok_or_else(|| {
+                ParakeetError::Shape(ndarray::ShapeError::from_kind(
+                    ndarray::ErrorKind::IncompatibleShape,
+                ))
+            })?;
+
             let vocab_logits = if probs.len() > self.vocab_size {
                 // TDT model - extract only vocabulary logits
                 log::trace!(
@@ -346,10 +370,10 @@ impl ParakeetModel {
                     probs.len(),
                     self.vocab_size
                 );
-                &probs.as_slice().unwrap()[..self.vocab_size]
+                &vocab_logits_slice[..self.vocab_size]
             } else {
                 // Regular RNN-T model
-                probs.as_slice().unwrap()
+                vocab_logits_slice
             };
 
             // Get argmax token from vocabulary logits only
@@ -390,15 +414,18 @@ impl ParakeetModel {
             })
             .collect();
 
-        let text = DECODE_SPACE_RE
-            .replace_all(&tokens.join(""), |caps: &regex::Captures| {
-                if caps.get(1).is_some() {
-                    " "
-                } else {
-                    ""
-                }
-            })
-            .to_string();
+        let text = match &*DECODE_SPACE_RE {
+            Ok(regex) => regex
+                .replace_all(&tokens.join(""), |caps: &regex::Captures| {
+                    if caps.get(1).is_some() {
+                        " "
+                    } else {
+                        ""
+                    }
+                })
+                .to_string(),
+            Err(_) => tokens.join(""), // Fallback if regex failed to compile
+        };
 
         let float_timestamps: Vec<f32> = timestamps
             .iter()
