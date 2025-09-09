@@ -1,4 +1,5 @@
 use ndarray::{Array, Array1, Array2, Array3, ArrayD, ArrayViewD, IxDyn};
+use once_cell::sync::Lazy;
 use ort::execution_providers::CPUExecutionProvider;
 use ort::inputs;
 use ort::session::builder::GraphOptimizationLevel;
@@ -13,6 +14,9 @@ pub type DecoderState = (Array3<f32>, Array3<f32>);
 
 const SUBSAMPLING_FACTOR: usize = 8;
 const WINDOW_SIZE: f32 = 0.01;
+
+static DECODE_SPACE_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\A\s|\s\B|(\s)\b").expect("invalid decode-space regex"));
 
 #[derive(Debug, Clone)]
 pub struct TimestampedResult {
@@ -39,7 +43,6 @@ pub struct ParakeetModel {
     blank_idx: i32,
     vocab_size: usize,
     max_tokens_per_step: usize,
-    decode_space_pattern: Regex,
 }
 
 impl ParakeetModel {
@@ -65,7 +68,6 @@ impl ParakeetModel {
             blank_idx,
             vocab_size,
             max_tokens_per_step: 10,
-            decode_space_pattern: Regex::new(r"\A\s|\s\B|(\s)\b").unwrap(),
         })
     }
 
@@ -269,14 +271,13 @@ impl ParakeetModel {
     pub fn decode_step(
         &mut self,
         prev_tokens: &[i32],
-        prev_state: DecoderState,
+        prev_state: &DecoderState,
         encoder_out: &ArrayViewD<f32>, // [time_steps, 1024]
-        blank_idx: i32,
     ) -> Result<(ArrayD<f32>, DecoderState), ParakeetError> {
         log::trace!("Running decoder inference...");
 
         // Get last token or blank_idx if empty
-        let target_token = prev_tokens.last().copied().unwrap_or(blank_idx);
+        let target_token = prev_tokens.last().copied().unwrap_or(self.blank_idx);
 
         // Prepare inputs matching Python: encoder_out[None, :, None] -> [1, time_steps, 1]
         let encoder_outputs = encoder_out
@@ -359,12 +360,8 @@ impl ParakeetModel {
             let encoder_step = encodings.slice(ndarray::s![t, ..]);
             // Convert to dynamic dimension to match decode_step parameter type
             let encoder_step_dyn = encoder_step.to_owned().into_dyn();
-            let (probs, new_state) = self.decode_step(
-                &tokens,
-                prev_state.clone(),
-                &encoder_step_dyn.view(),
-                self.blank_idx,
-            )?;
+            let (probs, new_state) =
+                self.decode_step(&tokens, &prev_state, &encoder_step_dyn.view())?;
 
             // For TDT models, split output into vocab logits and duration logits
             // output[:vocab_size] = vocabulary logits
@@ -420,8 +417,7 @@ impl ParakeetModel {
             })
             .collect();
 
-        let text = self
-            .decode_space_pattern
+        let text = DECODE_SPACE_RE
             .replace_all(&tokens.join(""), |caps: &regex::Captures| {
                 if caps.get(1).is_some() {
                     " "

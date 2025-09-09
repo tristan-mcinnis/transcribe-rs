@@ -898,6 +898,7 @@ dependencies = [
  "hound",
  "log",
  "ndarray",
+ "once_cell",
  "ort",
  "regex",
  "thiserror",

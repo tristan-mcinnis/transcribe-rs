@@ -107,8 +107,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // sleep 3 sec
-    std::thread::sleep(std::time::Duration::from_secs(3));
-
     Ok(())
 }
