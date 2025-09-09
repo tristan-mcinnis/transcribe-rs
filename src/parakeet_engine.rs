@@ -5,7 +5,7 @@ use ort::session::builder::GraphOptimizationLevel;
 use ort::session::Session;
 use ort::value::TensorRef;
 use regex::Regex;
-use std::collections::HashMap;
+
 use std::fs;
 use std::path::Path;
 
@@ -35,7 +35,7 @@ pub struct ParakeetModel {
     encoder: Session,
     decoder_joint: Session,
     preprocessor: Session,
-    vocab: HashMap<usize, String>,
+    vocab: Vec<String>,
     blank_idx: i32,
     vocab_size: usize,
     max_tokens_per_step: usize,
@@ -69,30 +69,35 @@ impl ParakeetModel {
         })
     }
 
-    fn load_vocab<P: AsRef<Path>>(
-        model_dir: P,
-    ) -> Result<(HashMap<usize, String>, i32), ParakeetError> {
+    fn load_vocab<P: AsRef<Path>>(model_dir: P) -> Result<(Vec<String>, i32), ParakeetError> {
         let vocab_path = model_dir.as_ref().join("vocab.txt");
         let content = fs::read_to_string(vocab_path)?;
 
-        let mut tokens: HashMap<String, usize> = HashMap::new();
+        let mut max_id = 0;
+        let mut tokens_with_ids: Vec<(String, usize)> = Vec::new();
+        let mut blank_idx: Option<usize> = None;
+
         for line in content.lines() {
             let parts: Vec<&str> = line.strip_suffix('\n').unwrap_or(line).split(' ').collect();
             if parts.len() >= 2 {
                 let token = parts[0].to_string();
                 if let Ok(id) = parts[1].parse::<usize>() {
-                    tokens.insert(token, id);
+                    if token == "<blk>" {
+                        blank_idx = Some(id);
+                    }
+                    tokens_with_ids.push((token, id));
+                    max_id = max_id.max(id);
                 }
             }
         }
 
-        // Create vocab map with \u2581 replaced with space
-        let vocab: HashMap<usize, String> = tokens
-            .iter()
-            .map(|(token, &id)| (id, token.replace('\u{2581}', " ")))
-            .collect();
+        // Create vocab vector with \u2581 replaced with space
+        let mut vocab = vec![String::new(); max_id + 1];
+        for (token, id) in tokens_with_ids {
+            vocab[id] = token.replace('\u{2581}', " ");
+        }
 
-        let blank_idx = tokens.get("<blk>").copied().ok_or_else(|| {
+        let blank_idx = blank_idx.ok_or_else(|| {
             ParakeetError::Io(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "Missing <blk> token in vocabulary",
@@ -405,7 +410,14 @@ impl ParakeetModel {
     fn decode_tokens(&self, ids: Vec<i32>, timestamps: Vec<usize>) -> TimestampedResult {
         let tokens: Vec<String> = ids
             .iter()
-            .filter_map(|&id| self.vocab.get(&(id as usize)).cloned())
+            .filter_map(|&id| {
+                let idx = id as usize;
+                if idx < self.vocab.len() {
+                    Some(self.vocab[idx].clone())
+                } else {
+                    None
+                }
+            })
             .collect();
 
         let text = self
