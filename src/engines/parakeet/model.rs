@@ -25,6 +25,7 @@ pub struct TimestampedResult {
     pub tokens: Vec<String>,
 }
 
+
 #[derive(thiserror::Error, Debug)]
 pub enum ParakeetError {
     #[error("ORT error")]
@@ -439,7 +440,7 @@ impl ParakeetModel {
         }
     }
 
-    pub fn transcribe_samples(&mut self, samples: Vec<f32>) -> Result<String, ParakeetError> {
+    pub fn transcribe_samples(&mut self, samples: Vec<f32>) -> Result<TimestampedResult, ParakeetError> {
         let batch_size = 1;
         let samples_len = samples.len();
 
@@ -449,31 +450,19 @@ impl ParakeetModel {
         // Create waveforms_lens array [batch_size] with the actual length
         let waveforms_lens = Array1::from_vec(vec![samples_len as i64]).into_dyn();
 
-        // Run recognition
+        // Run recognition to get detailed results
         let results = self.recognize_batch(&waveforms.view(), &waveforms_lens.view())?;
 
-        for (i, result) in results.iter().enumerate() {
-            println!("Segment {}:", i);
-            for (j, (token, &timestamp)) in result
-                .tokens
-                .iter()
-                .zip(result.timestamps.iter())
-                .enumerate()
-            {
-                let next_timestamp = result.timestamps.get(j + 1).unwrap_or(&timestamp);
-                println!(
-                    "  {:.2}s - {:.2}s: \"{}\"",
-                    timestamp, next_timestamp, token
-                );
-            }
-            println!();
-        }
-
-        // Return the transcribed text from the first (and only) result
-        Ok(results
+        // Extract the first (and only) result
+        let timestamped_result = results
             .into_iter()
             .next()
-            .map(|r| r.text)
-            .unwrap_or_default())
+            .ok_or_else(|| ParakeetError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "No transcription result returned",
+            )))?;
+
+        Ok(timestamped_result)
     }
+
 }
