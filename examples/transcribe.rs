@@ -24,7 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
     // Switch between engines here
-    let engine_type = Engine::Parakeet; // Change to Engine::Parakeet to use Parakeet
+    let engine_type = Engine::Whisper; // Change to Engine::Parakeet to use Parakeet
 
     let wav_path = PathBuf::from("samples/dots.wav");
 
