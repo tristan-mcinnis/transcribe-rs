@@ -2,13 +2,17 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use transcribe_rs::{
-    engines::parakeet::{ParakeetEngine, ParakeetParams, TimestampGranularity},
-    engines::whisper::WhisperEngine,
+    engines::{
+        parakeet::{
+            ParakeetEngine, ParakeetInferenceParams, ParakeetModelParams, TimestampGranularity,
+        },
+        whisper::WhisperEngine,
+    },
     TranscriptionEngine,
 };
 
 fn get_audio_duration(path: &PathBuf) -> Result<f64, Box<dyn std::error::Error>> {
-    let mut reader = hound::WavReader::open(path)?;
+    let reader = hound::WavReader::open(path)?;
     let spec = reader.spec();
     let duration = reader.duration() as f64 / spec.sample_rate as f64;
     Ok(duration)
@@ -24,7 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
     // Switch between engines here
-    let engine_type = Engine::Whisper; // Change to Engine::Parakeet to use Parakeet
+    let engine_type = Engine::Parakeet; // Change to Engine::Parakeet to use Parakeet
 
     let wav_path = PathBuf::from("samples/dots.wav");
 
@@ -79,7 +83,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Loading model: {:?}", model_path);
 
             let load_start = Instant::now();
-            engine.load_model(&model_path)?;
+            engine.load_model_with_params(&model_path, ParakeetModelParams::int8())?;
             let load_duration = load_start.elapsed();
             println!("Model loaded in {:.2?}", load_duration);
 
@@ -87,7 +91,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let transcribe_start = Instant::now();
 
             // Configure Parakeet parameters with timestamp granularity
-            let params = ParakeetParams {
+            let params = ParakeetInferenceParams {
                 timestamp_granularity: TimestampGranularity::Segment, // Options: Token, Word, Segment
                 ..Default::default()
             };

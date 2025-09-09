@@ -3,15 +3,6 @@ pub mod engines;
 
 use std::path::PathBuf;
 
-#[derive(Debug, Clone)]
-pub struct ModelInfo {
-    pub name: String,
-    pub parameters: u64,
-    pub size_gb: f32,
-    pub quantization: String,
-    pub languages: Vec<String>,
-}
-
 #[derive(Debug)]
 pub struct TranscriptionResult {
     pub text: String,
@@ -25,30 +16,26 @@ pub struct TranscriptionSegment {
     pub text: String,
 }
 
-
 pub trait TranscriptionEngine {
-    type Params;
+    type InferenceParams;
+    type ModelParams: Default;
 
-    fn list_models(&self) -> Vec<ModelInfo>;
-    fn download_model(
-        &self,
-        model_name: &str,
-        path: Option<PathBuf>,
-    ) -> Result<PathBuf, Box<dyn std::error::Error>>;
-    fn validate_model(&self, model_path: &PathBuf) -> bool;
-    fn get_model_details(&self, model_name: &str) -> Option<ModelInfo>;
-    fn load_model(&mut self, model_path: &PathBuf) -> Result<(), Box<dyn std::error::Error>>;
+    fn load_model(&mut self, model_path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+        self.load_model_with_params(model_path, Self::ModelParams::default())
+    }
+    
+    fn load_model_with_params(&mut self, model_path: &PathBuf, params: Self::ModelParams) -> Result<(), Box<dyn std::error::Error>>;
     fn unload_model(&mut self);
     fn transcribe_samples(
         &mut self,
         samples: Vec<f32>,
-        params: Option<Self::Params>,
+        params: Option<Self::InferenceParams>,
     ) -> Result<TranscriptionResult, Box<dyn std::error::Error>>;
 
     fn transcribe_file(
         &mut self,
         wav_path: &PathBuf,
-        params: Option<Self::Params>,
+        params: Option<Self::InferenceParams>,
     ) -> Result<TranscriptionResult, Box<dyn std::error::Error>> {
         let samples = audio::read_wav_samples(wav_path)?;
         self.transcribe_samples(samples, params)

@@ -1,6 +1,6 @@
 use crate::{
     engines::parakeet::{model::ParakeetModel, timestamps::convert_timestamps},
-    ModelInfo, TranscriptionEngine, TranscriptionResult,
+    TranscriptionEngine, TranscriptionResult,
 };
 use std::path::PathBuf;
 
@@ -12,25 +12,45 @@ pub enum TimestampGranularity {
     Segment,
 }
 
-#[derive(Debug, Clone)]
-pub struct ParakeetParams {
-    pub timestamp_granularity: TimestampGranularity,
-    pub beam_size: usize,
-    pub temperature: f32,
-    pub max_tokens: usize,
-    pub suppress_blank: bool,
-    pub suppress_repetitions: bool,
+#[derive(Debug, Clone, Default, PartialEq)]
+pub enum QuantizationType {
+    #[default]
+    FP32,
+    Int8,
 }
 
-impl Default for ParakeetParams {
+#[derive(Debug, Clone, Default)]
+pub struct ParakeetModelParams {
+    pub quantization: QuantizationType,
+}
+
+impl ParakeetModelParams {
+    pub fn fp32() -> Self {
+        Self {
+            quantization: QuantizationType::FP32,
+        }
+    }
+
+    pub fn int8() -> Self {
+        Self {
+            quantization: QuantizationType::Int8,
+        }
+    }
+
+    pub fn quantized(quantization: QuantizationType) -> Self {
+        Self { quantization }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ParakeetInferenceParams {
+    pub timestamp_granularity: TimestampGranularity,
+}
+
+impl Default for ParakeetInferenceParams {
     fn default() -> Self {
         Self {
             timestamp_granularity: TimestampGranularity::Token,
-            beam_size: 5,
-            temperature: 0.0,
-            max_tokens: 512,
-            suppress_blank: true,
-            suppress_repetitions: true,
         }
     }
 }
@@ -50,32 +70,19 @@ impl ParakeetEngine {
 }
 
 impl TranscriptionEngine for ParakeetEngine {
-    type Params = ParakeetParams;
+    type InferenceParams = ParakeetInferenceParams;
+    type ModelParams = ParakeetModelParams;
 
-    fn list_models(&self) -> Vec<ModelInfo> {
-        vec![]
-    }
-
-    fn download_model(
-        &self,
-        model_name: &str,
-        path: Option<PathBuf>,
-    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        todo!("Download {} to {:?}", model_name, path)
-    }
-
-    fn validate_model(&self, model_path: &PathBuf) -> bool {
-        todo!("Validate model at {:?}", model_path)
-    }
-
-    fn get_model_details(&self, model_name: &str) -> Option<ModelInfo> {
-        self.list_models()
-            .into_iter()
-            .find(|m| m.name == model_name)
-    }
-
-    fn load_model(&mut self, model_path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-        let model = ParakeetModel::new(model_path)?;
+    fn load_model_with_params(
+        &mut self,
+        model_path: &PathBuf,
+        params: Self::ModelParams,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let quantized = match params.quantization {
+            QuantizationType::FP32 => false,
+            QuantizationType::Int8 => true,
+        };
+        let model = ParakeetModel::new(model_path, quantized)?;
 
         self.model = Some(model);
         self.loaded_model_path = Some(model_path.clone());
@@ -90,7 +97,7 @@ impl TranscriptionEngine for ParakeetEngine {
     fn transcribe_samples(
         &mut self,
         samples: Vec<f32>,
-        params: Option<Self::Params>,
+        params: Option<Self::InferenceParams>,
     ) -> Result<TranscriptionResult, Box<dyn std::error::Error>> {
         let model: &mut ParakeetModel = self
             .model

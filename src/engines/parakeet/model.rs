@@ -14,6 +14,7 @@ pub type DecoderState = (Array3<f32>, Array3<f32>);
 
 const SUBSAMPLING_FACTOR: usize = 8;
 const WINDOW_SIZE: f32 = 0.01;
+const MAX_TOKENS_PER_STEP: usize = 10;
 
 static DECODE_SPACE_RE: Lazy<Result<Regex, regex::Error>> =
     Lazy::new(|| Regex::new(r"\A\s|\s\B|(\s)\b"));
@@ -48,13 +49,12 @@ pub struct ParakeetModel {
     vocab: Vec<String>,
     blank_idx: i32,
     vocab_size: usize,
-    max_tokens_per_step: usize,
 }
 
 impl ParakeetModel {
-    pub fn new<P: AsRef<Path>>(model_dir: P) -> Result<Self, ParakeetError> {
-        let encoder = Self::init_session(&model_dir, "encoder-model", None, true)?;
-        let decoder_joint = Self::init_session(&model_dir, "decoder_joint-model", None, true)?;
+    pub fn new<P: AsRef<Path>>(model_dir: P, quantized: bool) -> Result<Self, ParakeetError> {
+        let encoder = Self::init_session(&model_dir, "encoder-model", None, quantized)?;
+        let decoder_joint = Self::init_session(&model_dir, "decoder_joint-model", None, quantized)?;
         let preprocessor = Self::init_session(&model_dir, "nemo128", None, false)?;
 
         let (vocab, blank_idx) = Self::load_vocab(&model_dir)?;
@@ -73,7 +73,6 @@ impl ParakeetModel {
             vocab,
             blank_idx,
             vocab_size,
-            max_tokens_per_step: 10,
         })
     }
 
@@ -392,7 +391,7 @@ impl ParakeetModel {
             }
 
             // Step logic from Python - simplified since step is always -1
-            if token == self.blank_idx || emitted_tokens == self.max_tokens_per_step {
+            if token == self.blank_idx || emitted_tokens == MAX_TOKENS_PER_STEP {
                 t += 1;
                 emitted_tokens = 0;
             }

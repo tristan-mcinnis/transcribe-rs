@@ -1,9 +1,12 @@
-use crate::{ModelInfo, TranscriptionEngine, TranscriptionResult, TranscriptionSegment};
+use crate::{TranscriptionEngine, TranscriptionResult, TranscriptionSegment};
 use std::path::PathBuf;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
+#[derive(Debug, Clone, Default)]
+pub struct WhisperModelParams {}
+
 #[derive(Debug, Clone)]
-pub struct WhisperParams {
+pub struct WhisperInferenceParams {
     pub language: Option<String>,
     pub print_special: bool,
     pub print_progress: bool,
@@ -14,7 +17,7 @@ pub struct WhisperParams {
     pub no_speech_thold: f32,
 }
 
-impl Default for WhisperParams {
+impl Default for WhisperInferenceParams {
     fn default() -> Self {
         Self {
             language: None,
@@ -46,30 +49,10 @@ impl WhisperEngine {
 }
 
 impl TranscriptionEngine for WhisperEngine {
-    type Params = WhisperParams;
-    fn list_models(&self) -> Vec<ModelInfo> {
-        vec![]
-    }
+    type InferenceParams = WhisperInferenceParams;
+    type ModelParams = WhisperModelParams;
 
-    fn download_model(
-        &self,
-        model_name: &str,
-        path: Option<PathBuf>,
-    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        todo!("Download {} to {:?}", model_name, path)
-    }
-
-    fn validate_model(&self, model_path: &PathBuf) -> bool {
-        todo!("Validate model at {:?}", model_path)
-    }
-
-    fn get_model_details(&self, model_name: &str) -> Option<ModelInfo> {
-        self.list_models()
-            .into_iter()
-            .find(|m| m.name == model_name)
-    }
-
-    fn load_model(&mut self, model_path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    fn load_model_with_params(&mut self, model_path: &PathBuf, _params: Self::ModelParams) -> Result<(), Box<dyn std::error::Error>> {
         // Create new context and state following your working pattern
         let context = WhisperContext::new_with_params(
             model_path.to_str().unwrap(),
@@ -94,7 +77,7 @@ impl TranscriptionEngine for WhisperEngine {
     fn transcribe_samples(
         &mut self,
         samples: Vec<f32>,
-        params: Option<Self::Params>,
+        params: Option<Self::InferenceParams>,
     ) -> Result<TranscriptionResult, Box<dyn std::error::Error>> {
         let state = self
             .state
