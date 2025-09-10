@@ -69,6 +69,12 @@ impl ParakeetEngine {
     }
 }
 
+impl Drop for ParakeetEngine {
+    fn drop(&mut self) {
+        self.unload_model();
+    }
+}
+
 impl TranscriptionEngine for ParakeetEngine {
     type InferenceParams = ParakeetInferenceParams;
     type ModelParams = ParakeetModelParams;

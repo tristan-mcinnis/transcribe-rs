@@ -23,8 +23,12 @@ pub trait TranscriptionEngine {
     fn load_model(&mut self, model_path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
         self.load_model_with_params(model_path, Self::ModelParams::default())
     }
-    
-    fn load_model_with_params(&mut self, model_path: &PathBuf, params: Self::ModelParams) -> Result<(), Box<dyn std::error::Error>>;
+
+    fn load_model_with_params(
+        &mut self,
+        model_path: &PathBuf,
+        params: Self::ModelParams,
+    ) -> Result<(), Box<dyn std::error::Error>>;
     fn unload_model(&mut self);
     fn transcribe_samples(
         &mut self,

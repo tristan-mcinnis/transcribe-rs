@@ -51,6 +51,12 @@ pub struct ParakeetModel {
     vocab_size: usize,
 }
 
+impl Drop for ParakeetModel {
+    fn drop(&mut self) {
+        log::debug!("Dropping ParakeetModel with {} vocab tokens", self.vocab.len());
+    }
+}
+
 impl ParakeetModel {
     pub fn new<P: AsRef<Path>>(model_dir: P, quantized: bool) -> Result<Self, ParakeetError> {
         let encoder = Self::init_session(&model_dir, "encoder-model", None, quantized)?;
@@ -461,15 +467,6 @@ impl ParakeetModel {
                 "No transcription result returned",
             ))
         })?;
-
-        // print the raw tokens and their timestamps from the mode
-        for (token, &ts) in timestamped_result
-            .tokens
-            .iter()
-            .zip(timestamped_result.timestamps.iter())
-        {
-            println!("Token: '{}', Timestamp: {:.2}s", token, ts);
-        }
 
         Ok(timestamped_result)
     }

@@ -48,6 +48,12 @@ impl WhisperEngine {
     }
 }
 
+impl Drop for WhisperEngine {
+    fn drop(&mut self) {
+        self.unload_model();
+    }
+}
+
 impl TranscriptionEngine for WhisperEngine {
     type InferenceParams = WhisperInferenceParams;
     type ModelParams = WhisperModelParams;
