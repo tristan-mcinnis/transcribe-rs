@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "A simple library to help you transcribe audio"
 license = "MIT"
+repository = "https://github.com/cjpais/transcribe-rs"
 
 [dependencies]
 hound = "3.5.1"
