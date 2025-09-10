@@ -77,7 +77,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Engine::Parakeet => {
             let mut engine = ParakeetEngine::new();
-            let model_path = PathBuf::from("models/parakeet-v0.3");
+            let model_path = PathBuf::from("models/parakeet-tdt-0.6b-v3-int8");
 
             println!("Using Parakeet engine");
             println!("Loading model: {:?}", model_path);

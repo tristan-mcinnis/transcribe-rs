@@ -1,19 +1,102 @@
+//! Whisper speech recognition engine implementation.
+//!
+//! This module provides a Whisper-based transcription engine that uses
+//! OpenAI's Whisper model for speech-to-text conversion. Whisper models
+//! are provided as single GGML format files.
+//!
+//! # Model Format
+//!
+//! Whisper expects a single model file in GGML format, typically with names like:
+//! - `whisper-tiny.bin`
+//! - `whisper-base.bin`
+//! - `whisper-small.bin`
+//! - `whisper-medium.bin`
+//! - `whisper-large.bin`
+//! - Quantized variants like `whisper-medium-q4_1.bin`
+//!
+//! # Examples
+//!
+//! ## Basic Usage
+//!
+//! ```rust,no_run
+//! use transcribe_rs::{TranscriptionEngine, engines::whisper::WhisperEngine};
+//! use std::path::PathBuf;
+//!
+//! let mut engine = WhisperEngine::new();
+//! engine.load_model(&PathBuf::from("models/whisper-medium-q4_1.bin"))?;
+//!
+//! let result = engine.transcribe_file(&PathBuf::from("audio.wav"), None)?;
+//! println!("Transcription: {}", result.text);
+//!
+//! for segment in result.segments {
+//!     println!("[{:.2}s - {:.2}s]: {}", segment.start, segment.end, segment.text);
+//! }
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
+//!
+//! ## With Custom Parameters
+//!
+//! ```rust,no_run
+//! use transcribe_rs::{TranscriptionEngine, engines::whisper::{WhisperEngine, WhisperInferenceParams}};
+//! use std::path::PathBuf;
+//!
+//! let mut engine = WhisperEngine::new();
+//! engine.load_model(&PathBuf::from("models/whisper-medium-q4_1.bin"))?;
+//!
+//! let params = WhisperInferenceParams {
+//!     language: Some("en".to_string()),
+//!     print_timestamps: true,
+//!     suppress_blank: true,
+//!     no_speech_thold: 0.6,
+//!     ..Default::default()
+//! };
+//!
+//! let result = engine.transcribe_file(&PathBuf::from("audio.wav"), Some(params))?;
+//! println!("Transcription: {}", result.text);
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
+
 use crate::{TranscriptionEngine, TranscriptionResult, TranscriptionSegment};
 use std::path::{Path, PathBuf};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
+/// Parameters for configuring Whisper model loading.
+///
+/// Currently, Whisper model loading doesn't require additional parameters
+/// beyond the model file path. This struct exists for API consistency
+/// and future extensibility.
 #[derive(Debug, Clone, Default)]
 pub struct WhisperModelParams {}
 
+/// Parameters for configuring Whisper inference behavior.
+///
+/// These parameters control various aspects of the transcription process,
+/// including language detection, output formatting, and noise suppression.
 #[derive(Debug, Clone)]
 pub struct WhisperInferenceParams {
+    /// Target language for transcription (e.g., "en", "es", "fr").
+    /// If None, Whisper will auto-detect the language.
     pub language: Option<String>,
+
+    /// Whether to print special tokens in the output
     pub print_special: bool,
+
+    /// Whether to print progress information during transcription
     pub print_progress: bool,
+
+    /// Whether to print results in real-time as they're generated
     pub print_realtime: bool,
+
+    /// Whether to include timestamp information in the output
     pub print_timestamps: bool,
+
+    /// Whether to suppress blank/empty segments in the output
     pub suppress_blank: bool,
+
+    /// Whether to suppress non-speech tokens (e.g., \[BLANK_AUDIO\])
     pub suppress_non_speech_tokens: bool,
+
+    /// Threshold for detecting silence/no-speech segments (0.0-1.0).
     pub no_speech_thold: f32,
 }
 
@@ -32,6 +115,25 @@ impl Default for WhisperInferenceParams {
     }
 }
 
+/// Whisper speech recognition engine.
+///
+/// This engine uses OpenAI's Whisper model for speech-to-text transcription.
+/// It supports various Whisper model sizes and quantization levels.
+///
+/// # Model Requirements
+///
+/// - **Format**: Single GGML format file (`.bin`)
+/// - **Models**: tiny, base, small, medium, large variants
+/// - **Quantization**: Supports quantized models (e.g., q4_1, q8_0)
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use transcribe_rs::engines::whisper::WhisperEngine;
+///
+/// let mut engine = WhisperEngine::new();
+/// // Engine is ready to load a model
+/// ```
 pub struct WhisperEngine {
     loaded_model_path: Option<PathBuf>,
     state: Option<whisper_rs::WhisperState>,
@@ -45,6 +147,19 @@ impl Default for WhisperEngine {
 }
 
 impl WhisperEngine {
+    /// Create a new Whisper engine instance.
+    ///
+    /// The engine starts unloaded - you must call `load_model()` before
+    /// performing transcription operations.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use transcribe_rs::engines::whisper::WhisperEngine;
+    ///
+    /// let engine = WhisperEngine::new();
+    /// // Engine is ready to load a model
+    /// ```
     pub fn new() -> Self {
         Self {
             loaded_model_path: None,

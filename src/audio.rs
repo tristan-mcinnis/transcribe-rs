@@ -1,5 +1,48 @@
+//! Audio processing utilities for transcription.
+//!
+//! This module provides functions for reading and processing audio files
+//! to prepare them for transcription engines.
+
 use std::path::Path;
 
+/// Read WAV file samples and convert them to the required format.
+///
+/// This function reads a WAV file and converts it to the format expected by
+/// transcription engines: 16kHz sample rate, 16-bit samples, mono channel.
+///
+/// # Arguments
+///
+/// * `wav_path` - Path to the WAV file to read
+///
+/// # Returns
+///
+/// Returns a vector of f32 samples normalized to the range [-1.0, 1.0].
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// - The file cannot be opened or read
+/// - The WAV format is incorrect (not 16kHz, 16-bit, mono)
+/// - The samples cannot be converted to the expected format
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use transcribe_rs::audio::read_wav_samples;
+/// use std::path::Path;
+///
+/// let samples = read_wav_samples(Path::new("audio.wav"))?;
+/// println!("Loaded {} samples", samples.len());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
+///
+/// # Audio Requirements
+///
+/// The input WAV file must have:
+/// - Sample rate: 16,000 Hz
+/// - Bit depth: 16 bits per sample
+/// - Channels: 1 (mono)
+/// - Format: PCM integer samples
 pub fn read_wav_samples(wav_path: &Path) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
     let mut reader = hound::WavReader::open(wav_path)?;
     let spec = reader.spec();
