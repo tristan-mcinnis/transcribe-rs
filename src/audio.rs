@@ -1,6 +1,6 @@
-use std::path::PathBuf;
+use std::path::Path;
 
-pub fn read_wav_samples(wav_path: &PathBuf) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
+pub fn read_wav_samples(wav_path: &Path) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
     let mut reader = hound::WavReader::open(wav_path)?;
     let spec = reader.spec();
 

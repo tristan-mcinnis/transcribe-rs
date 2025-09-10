@@ -2,7 +2,7 @@ use crate::{
     engines::parakeet::{model::ParakeetModel, timestamps::convert_timestamps},
     TranscriptionEngine, TranscriptionResult,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub enum TimestampGranularity {
@@ -60,6 +60,12 @@ pub struct ParakeetEngine {
     model: Option<ParakeetModel>,
 }
 
+impl Default for ParakeetEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ParakeetEngine {
     pub fn new() -> Self {
         Self {
@@ -81,7 +87,7 @@ impl TranscriptionEngine for ParakeetEngine {
 
     fn load_model_with_params(
         &mut self,
-        model_path: &PathBuf,
+        model_path: &Path,
         params: Self::ModelParams,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let quantized = match params.quantization {
@@ -91,7 +97,7 @@ impl TranscriptionEngine for ParakeetEngine {
         let model = ParakeetModel::new(model_path, quantized)?;
 
         self.model = Some(model);
-        self.loaded_model_path = Some(model_path.clone());
+        self.loaded_model_path = Some(model_path.to_path_buf());
         Ok(())
     }
 

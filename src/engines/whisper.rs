@@ -1,5 +1,5 @@
 use crate::{TranscriptionEngine, TranscriptionResult, TranscriptionSegment};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
 #[derive(Debug, Clone, Default)]
@@ -38,6 +38,12 @@ pub struct WhisperEngine {
     context: Option<whisper_rs::WhisperContext>,
 }
 
+impl Default for WhisperEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WhisperEngine {
     pub fn new() -> Self {
         Self {
@@ -58,7 +64,11 @@ impl TranscriptionEngine for WhisperEngine {
     type InferenceParams = WhisperInferenceParams;
     type ModelParams = WhisperModelParams;
 
-    fn load_model_with_params(&mut self, model_path: &PathBuf, _params: Self::ModelParams) -> Result<(), Box<dyn std::error::Error>> {
+    fn load_model_with_params(
+        &mut self,
+        model_path: &Path,
+        _params: Self::ModelParams,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Create new context and state following your working pattern
         let context = WhisperContext::new_with_params(
             model_path.to_str().unwrap(),
@@ -70,7 +80,7 @@ impl TranscriptionEngine for WhisperEngine {
         self.context = Some(context);
         self.state = Some(state);
 
-        self.loaded_model_path = Some(model_path.clone());
+        self.loaded_model_path = Some(model_path.to_path_buf());
         Ok(())
     }
 
