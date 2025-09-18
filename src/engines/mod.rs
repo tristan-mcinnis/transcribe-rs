@@ -25,22 +25,28 @@
 //! # Usage Comparison
 //!
 //! ```rust,no_run
-//! use transcribe_rs::{TranscriptionEngine, engines::{whisper::WhisperEngine, parakeet::ParakeetEngine}};
 //! use std::path::PathBuf;
+//! use transcribe_rs::{TranscriptionEngine, engines::whisper::WhisperEngine};
+//! #[cfg(feature = "parakeet")]
+//! use transcribe_rs::engines::parakeet::ParakeetEngine;
 //!
 //! // Whisper: Single file model
 //! let mut whisper = WhisperEngine::new();
 //! whisper.load_model(&PathBuf::from("models/whisper-medium-q4_1.bin"))?;
-//!
-//! // Parakeet: Directory model
-//! let mut parakeet = ParakeetEngine::new();
-//! parakeet.load_model(&PathBuf::from("models/parakeet-v0.3"))?;
-//!
-//! // Both engines implement the same TranscriptionEngine trait
 //! let whisper_result = whisper.transcribe_file(&PathBuf::from("audio.wav"), None)?;
-//! let parakeet_result = parakeet.transcribe_file(&PathBuf::from("audio.wav"), None)?;
+//! # let _ = whisper_result;
+//!
+//! #[cfg(feature = "parakeet")]
+//! {
+//!     // Parakeet: Directory model
+//!     let mut parakeet = ParakeetEngine::new();
+//!     parakeet.load_model(&PathBuf::from("models/parakeet-v0.3"))?;
+//!     let parakeet_result = parakeet.transcribe_file(&PathBuf::from("audio.wav"), None)?;
+//!     # let _ = parakeet_result;
+//! }
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+#[cfg(feature = "parakeet")]
 pub mod parakeet;
 pub mod whisper;

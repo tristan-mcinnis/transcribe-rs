@@ -1,3 +1,6 @@
 /target
 models/
 *.DS_Store
+electron/node_modules/
+electron/out/
+.env.local

@@ -44,6 +44,7 @@
 
 pub mod audio;
 pub mod engines;
+pub mod realtime;
 
 use std::path::Path;
 
@@ -97,6 +98,8 @@ pub struct TranscriptionSegment {
 /// ## Using Parakeet Engine
 ///
 /// ```rust,no_run
+/// # #[cfg(feature = "parakeet")]
+/// # {
 /// use transcribe_rs::{TranscriptionEngine, engines::parakeet::{ParakeetEngine, ParakeetModelParams}};
 /// use std::path::PathBuf;
 ///
@@ -108,6 +111,7 @@ pub struct TranscriptionSegment {
 ///
 /// let result = engine.transcribe_file(&PathBuf::from("audio.wav"), None)?;
 /// println!("Transcription: {}", result.text);
+/// # }
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub trait TranscriptionEngine {
