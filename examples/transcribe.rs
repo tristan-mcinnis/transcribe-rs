@@ -1,15 +1,11 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use transcribe_rs::{
-    engines::{
-        parakeet::{
-            ParakeetEngine, ParakeetInferenceParams, ParakeetModelParams, TimestampGranularity,
-        },
-        whisper::WhisperEngine,
-    },
-    TranscriptionEngine,
+#[cfg(feature = "parakeet")]
+use transcribe_rs::engines::parakeet::{
+    ParakeetEngine, ParakeetInferenceParams, ParakeetModelParams, TimestampGranularity,
 };
+use transcribe_rs::{engines::whisper::WhisperEngine, TranscriptionEngine};
 
 fn get_audio_duration(path: &PathBuf) -> Result<f64, Box<dyn std::error::Error>> {
     let reader = hound::WavReader::open(path)?;
@@ -20,6 +16,7 @@ fn get_audio_duration(path: &PathBuf) -> Result<f64, Box<dyn std::error::Error>>
 
 enum Engine {
     Whisper,
+    #[cfg(feature = "parakeet")]
     Parakeet,
 }
 
@@ -28,7 +25,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
     // Switch between engines here
-    let engine_type = Engine::Parakeet; // Change to Engine::Parakeet to use Parakeet
+    #[cfg(feature = "parakeet")]
+    let engine_type = Engine::Parakeet;
+    #[cfg(not(feature = "parakeet"))]
+    let engine_type = Engine::Whisper;
 
     let wav_path = PathBuf::from("samples/dots.wav");
 
@@ -75,6 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             engine.unload_model();
         }
+        #[cfg(feature = "parakeet")]
         Engine::Parakeet => {
             let mut engine = ParakeetEngine::new();
             let model_path = PathBuf::from("models/parakeet-tdt-0.6b-v3-int8");
