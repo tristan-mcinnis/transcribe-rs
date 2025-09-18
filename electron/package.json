@@ -1,0 +1,20 @@
+{
+  "name": "transcribe-notes-electron",
+  "version": "0.1.0",
+  "description": "Realtime transcript-driven note taking shell for transcribe-rs",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build-cli": "cargo build --bin realtime_cli",
+    "test": "jest"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "openai": "^4.56.0"
+  },
+  "devDependencies": {
+    "electron": "^30.0.9",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  }
+}
