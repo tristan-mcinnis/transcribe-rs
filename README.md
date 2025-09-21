@@ -74,6 +74,8 @@ Notes:
 - Without an OpenAI API key, transcription still works but notes won't be generated
 - The app maintains a 30-second audio buffer for optimal transcription
 
+For a deeper dive into turning the app into a full realtime meeting copilot with floating AI panes (notes, follow-ups, decisions, and more), see [`docs/realtime-pane-architecture.md`](docs/realtime-pane-architecture.md).
+
 ### CLI-Only Streaming
 
 You can also use the realtime helper directly from the terminal if you prefer wiring it into another UI:
