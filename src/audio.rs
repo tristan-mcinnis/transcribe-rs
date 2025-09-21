@@ -82,9 +82,19 @@ pub fn read_wav_samples(wav_path: &Path) -> Result<Vec<f32>, Box<dyn std::error:
         return Err(format!("Expected Int sample format, found {:?}", spec.sample_format).into());
     }
 
+    let scale = i16::MAX as f32;
+
     let samples: Result<Vec<f32>, _> = reader
         .samples::<i16>()
-        .map(|sample| sample.map(|s| s as f32 / i16::MAX as f32))
+        .map(|sample| {
+            sample.map(|s| {
+                if s == i16::MIN {
+                    -1.0
+                } else {
+                    s as f32 / scale
+                }
+            })
+        })
         .collect();
 
     Ok(samples?)
