@@ -65,14 +65,25 @@ The Electron app provides:
 - **Model configuration:** Select either:
   - Parakeet: Choose the directory `models/parakeet-tdt-0.6b-v3-int8`
   - Whisper: Choose the file `models/whisper-medium-q4_1.bin`
-- **Live transcript:** Real-time transcription of your speech
-- **AI-generated notes:** Bullet-point summaries created by OpenAI (requires API key)
+- **Live transcript pane:** Always-on transcript with draggable Mac-style chrome
+- **Floating AI panes:** Add realtime note takers, follow-up question trackers, action item detectors, and more
 - **Language selection:** Optional language hint for better accuracy
 
 Notes:
 - On macOS, Metal acceleration is used automatically when available
-- Without an OpenAI API key, transcription still works but notes won't be generated
+- Without an OpenAI API key, the transcript still works but AI panes stay disabled
+- Pane layouts are persisted locally so your workspace opens exactly where you left it
 - The app maintains a 30-second audio buffer for optimal transcription
+
+For a deeper dive into turning the app into a full realtime meeting copilot with floating AI panes (notes, follow-ups, decisions, and more), see [`docs/realtime-pane-architecture.md`](docs/realtime-pane-architecture.md).
+
+### Floating Pane Workspace
+
+1. **Add panes from templates:** Use the **Add AI pane** dropdown to spawn curated panes such as Note Taker, Follow-up Questions, Action Items, and Decisions.
+2. **Drag panes anywhere:** Each pane floats above the canvas with magnetic snapping. The layout is saved automatically per device so Mac Mission Control spaces stay consistent across launches.
+3. **Customize prompts:** Click the ✎ button on a pane to edit its instructions, switch models, or adjust system guidance. Use the **Custom pane** button to craft completely new prompts; the app injects the live transcript wherever you place `{{transcript}}`.
+4. **Force refresh or close:** The ↻ button requests an immediate update. The ✕ button removes a pane from the workspace; you can always add it back later.
+5. **API key required for AI panes:** When no `OPENAI_API_KEY` is present, panes stay in a disabled state and explain how to enable them while the transcript continues to run offline.
 
 ### CLI-Only Streaming
 

@@ -7,7 +7,7 @@
       :root {
         font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         color: #101828;
-        background: #f4f5f7;
+        background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
       }
 
       body {
@@ -21,7 +21,7 @@
         padding: 16px 24px;
         background: #101828;
         color: #fff;
-        box-shadow: 0 2px 6px rgba(16, 24, 40, 0.1);
+        box-shadow: 0 2px 6px rgba(16, 24, 40, 0.12);
       }
 
       header h1 {
@@ -43,10 +43,11 @@
         flex-wrap: wrap;
         gap: 16px;
         align-items: flex-end;
-        background: #fff;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(16px);
         padding: 16px;
-        border-radius: 12px;
-        box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+        border-radius: 16px;
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
       }
 
       .control-group {
@@ -63,132 +64,263 @@
 
       input,
       select {
-        border-radius: 8px;
+        border-radius: 10px;
         border: 1px solid #d0d5dd;
-        padding: 8px 10px;
+        padding: 9px 12px;
         font-size: 14px;
         background: #fff;
         color: #101828;
       }
 
+      select {
+        min-width: 200px;
+      }
+
       button {
-        border-radius: 8px;
+        border-radius: 10px;
         border: none;
         padding: 10px 18px;
         font-size: 14px;
         font-weight: 600;
         cursor: pointer;
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
       }
 
       button.primary {
         background: #2563eb;
         color: #fff;
+        box-shadow: 0 6px 14px rgba(37, 99, 235, 0.24);
       }
 
       button.secondary {
-        background: #e4e7ec;
-        color: #344054;
+        background: rgba(37, 99, 235, 0.08);
+        color: #1d4ed8;
+        border: 1px solid rgba(37, 99, 235, 0.18);
       }
 
       button:disabled {
         opacity: 0.6;
         cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+
+      button:not(:disabled):hover {
+        transform: translateY(-1px);
       }
 
       .status-line {
         font-size: 13px;
         color: #475467;
         min-height: 18px;
+        padding: 4px 6px;
       }
 
-      .columns {
+      .pane-template-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .pane-hint {
+        font-size: 12px;
+        color: #667085;
+      }
+
+      .workspace {
         flex: 1;
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 16px;
+        position: relative;
+        min-height: 420px;
       }
 
-      .panel {
-        background: #fff;
-        border-radius: 12px;
-        padding: 18px;
+      .pane-canvas {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        min-height: 420px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.6);
+        box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.05);
+        overflow: hidden;
+      }
+
+      .floating-pane {
+        position: absolute;
+        top: 24px;
+        left: 24px;
+        width: 360px;
+        max-width: 420px;
+        min-height: 240px;
         display: flex;
         flex-direction: column;
-        box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
-        min-height: 0;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 18px 34px rgba(15, 23, 42, 0.18);
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        transition: box-shadow 0.2s ease;
       }
 
-      .panel h2 {
-        margin: 0 0 12px;
-        font-size: 16px;
+      .floating-pane.dragging {
+        box-shadow: 0 20px 40px rgba(37, 99, 235, 0.28);
+      }
+
+      .pane-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 18px 8px;
+        cursor: grab;
+        user-select: none;
+      }
+
+      .pane-title {
+        font-size: 15px;
         font-weight: 600;
-        color: #1d2939;
+        color: #1e293b;
       }
 
-      .scroll-panel {
+      .pane-actions {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .pane-action {
+        border: none;
+        background: rgba(15, 23, 42, 0.06);
+        border-radius: 8px;
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        font-size: 13px;
+        cursor: pointer;
+        transition: background 0.12s ease, transform 0.12s ease;
+      }
+
+      .pane-action:hover {
+        background: rgba(37, 99, 235, 0.15);
+        transform: translateY(-1px);
+      }
+
+      .pane-action:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .pane-tag {
+        font-size: 11px;
+        font-weight: 600;
+        color: #1d4ed8;
+        background: rgba(37, 99, 235, 0.12);
+        border-radius: 999px;
+        padding: 4px 10px;
+      }
+
+      .pane-body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 4px 18px 18px;
+        gap: 10px;
+      }
+
+      .pane-status {
+        font-size: 12px;
+        color: #64748b;
+        min-height: 16px;
+      }
+
+      .pane-status.error {
+        color: #b91c1c;
+      }
+
+      .pane-content {
         flex: 1;
         overflow-y: auto;
-        padding-right: 4px;
-      }
-
-      .segment {
+        padding-right: 6px;
         display: flex;
-        gap: 12px;
-        padding: 8px 0;
-        border-bottom: 1px solid #f2f4f7;
+        flex-direction: column;
+        gap: 10px;
       }
 
-      .segment:last-child {
-        border-bottom: none;
+      .pane-content::-webkit-scrollbar {
+        width: 8px;
       }
 
-      .timestamp {
-        font-size: 12px;
-        font-weight: 600;
-        color: #475467;
-        min-width: 48px;
+      .pane-content::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: rgba(100, 116, 139, 0.35);
       }
 
-      .segment-text {
-        font-size: 14px;
-        line-height: 1.4;
-        color: #101828;
-        white-space: pre-wrap;
-      }
-
-      .notes-status {
-        font-size: 13px;
-        color: #667085;
-        margin-bottom: 12px;
-      }
-
-      .notes-list {
-        list-style: disc inside;
+      .pane-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
         display: flex;
         flex-direction: column;
         gap: 8px;
-        padding: 0;
-        margin: 0;
+      }
+
+      .pane-list li {
+        background: rgba(226, 232, 240, 0.6);
+        border-radius: 12px;
+        padding: 10px 12px;
         font-size: 14px;
-        color: #101828;
+        line-height: 1.4;
+        color: #0f172a;
+        border: 1px solid rgba(148, 163, 184, 0.28);
       }
 
-      .notes-list li {
-        background: #f8fafc;
-        border-radius: 10px;
-        padding: 10px 14px;
-        border: 1px solid #e2e8f0;
+      .pane-text-block {
+        font-size: 14px;
+        line-height: 1.55;
+        color: #0f172a;
+        white-space: pre-wrap;
+        background: rgba(241, 245, 249, 0.8);
+        border-radius: 12px;
+        padding: 12px 14px;
+        border: 1px solid rgba(148, 163, 184, 0.24);
       }
 
-      .placeholder {
+      .pane-placeholder {
         font-size: 13px;
-        color: #98a2b3;
+        color: #94a3b8;
+        padding: 12px 0;
+      }
+
+      .transcript-content {
+        font-family: "SF Mono", "Menlo", monospace;
+        font-size: 13px;
+        color: #0f172a;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .transcript-segment {
+        display: flex;
+        gap: 10px;
+      }
+
+      .transcript-timestamp {
+        font-weight: 600;
+        color: #2563eb;
+        min-width: 56px;
+      }
+
+      @media (max-width: 1024px) {
+        .floating-pane {
+          width: min(100%, 360px);
+        }
       }
     </style>
   </head>
   <body>
     <header>
-      <h1>transcribe-rs realtime notes</h1>
+      <h1>transcribe-rs realtime meeting cockpit</h1>
     </header>
     <main>
       <section class="controls">
@@ -211,20 +343,34 @@
           <button id="startButton" class="primary">Start capture</button>
           <button id="stopButton" class="secondary" disabled>Stop</button>
         </div>
+        <div class="control-group">
+          <label for="paneTemplate">Add AI pane</label>
+          <div class="pane-template-row">
+            <select id="paneTemplate"></select>
+            <button id="addPaneButton" class="secondary">Add pane</button>
+            <button id="customPaneButton" class="secondary">Custom pane</button>
+          </div>
+          <div class="pane-hint" id="paneHint">Loading pane templates…</div>
+        </div>
       </section>
 
       <div class="status-line" id="status">Waiting to start…</div>
 
-      <section class="columns">
-        <article class="panel">
-          <h2>Live transcript</h2>
-          <div id="transcript" class="scroll-panel placeholder">No audio yet.</div>
-        </article>
-        <article class="panel">
-          <h2>Realtime notes</h2>
-          <div id="notesStatus" class="notes-status">Notes idle</div>
-          <ul id="notes" class="notes-list"></ul>
-        </article>
+      <section class="workspace">
+        <div id="paneCanvas" class="pane-canvas">
+          <article class="floating-pane transcript-pane" data-pane-id="transcript">
+            <div class="pane-header">
+              <div class="pane-title">Live transcript</div>
+              <div class="pane-actions">
+                <span class="pane-tag">Always on</span>
+              </div>
+            </div>
+            <div class="pane-body">
+              <div id="transcriptStatus" class="pane-status">No audio yet.</div>
+              <div id="transcript" class="pane-content transcript-content"></div>
+            </div>
+          </article>
+        </div>
       </section>
     </main>
     <script src="./utils.js"></script>

@@ -5,11 +5,10 @@ const { spawn } = require('child_process');
 const dotenv = require('dotenv');
 const {
   buildSpawnCommand,
-  formatTimestamp,
-  extractResponseText,
-  parseNotesOutput,
   createCliLineHandler,
 } = require('./session-utils');
+const { PaneManager } = require('./pane-manager');
+const { DEFAULT_PANE_TEMPLATES } = require('./pane-templates');
 
 const repoRoot = path.resolve(__dirname, '..');
 dotenv.config({ path: path.join(repoRoot, '.env') });
@@ -19,20 +18,28 @@ let cliProcess = null;
 let cliReady = false;
 let stdoutBuffer = '';
 let transcriptState = { text: '', segments: [] };
-let notesState = { bullets: [], raw: '' };
-let noteUpdateScheduled = false;
-
 let openaiClient = null;
-let notesAvailable = false;
+let llmAvailable = false;
 try {
   const { OpenAI } = require('openai');
   if (process.env.OPENAI_API_KEY) {
     openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    notesAvailable = true;
+    llmAvailable = true;
   }
 } catch (err) {
   console.warn('OpenAI client unavailable:', err.message);
 }
+
+const paneManager = new PaneManager({
+  openaiClient,
+  onUpdate: (payload) => {
+    mainWindow?.webContents.send('pane-update', payload);
+  },
+  onRemove: (paneId) => {
+    mainWindow?.webContents.send('pane-removed', paneId);
+  },
+});
+paneManager.setOpenAIClient(openaiClient);
 
 const handleCliLine = createCliLineHandler({
   onReady: (payload) => {
@@ -52,9 +59,7 @@ const handleCliLine = createCliLineHandler({
       segments: Array.isArray(segments) ? segments : [],
     };
     pushTranscript();
-    if (notesAvailable) {
-      scheduleNotesUpdate();
-    }
+    paneManager.setTranscript(transcriptState);
   },
 });
 
@@ -72,9 +77,8 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
   mainWindow.webContents.once('did-finish-load', () => {
-    mainWindow?.webContents.send('notes-availability', notesAvailable);
+    mainWindow?.webContents.send('pane-llm-availability', llmAvailable);
     pushTranscript();
-    pushNotes();
   });
 }
 
@@ -101,7 +105,7 @@ app.on('before-quit', () => {
 ipcMain.handle('start-session', async (_event, config) => {
   try {
     await startCliProcess(config);
-    return { success: true, notesEnabled: notesAvailable };
+    return { success: true, llmAvailable };
   } catch (error) {
     console.error('Failed to start session', error);
     sendStatus(`Failed to start: ${error.message}`);
@@ -114,8 +118,31 @@ ipcMain.handle('stop-session', async () => {
   stopCliProcess();
   resetState();
   pushTranscript();
-  pushNotes();
   return { success: true };
+});
+
+ipcMain.handle('pane:get-templates', async () =>
+  DEFAULT_PANE_TEMPLATES.map((template) => ({ ...template }))
+);
+
+ipcMain.handle('pane:set-configs', async (_event, configs) => {
+  try {
+    paneManager.setPanes(Array.isArray(configs) ? configs : []);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to configure panes', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('pane:refresh', async (_event, paneId) => {
+  try {
+    paneManager.forceRefresh(String(paneId || ''));
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to refresh pane', error);
+    return { success: false, error: error.message };
+  }
 });
 
 ipcMain.on('audio-chunk', (_event, payload) => {
@@ -155,7 +182,6 @@ function startCliProcess(config) {
     stopCliProcess();
     resetState();
     pushTranscript();
-    pushNotes();
 
     const resolvedModelPath = path.isAbsolute(config.modelPath)
       ? config.modelPath
@@ -244,93 +270,6 @@ function startCliProcess(config) {
   });
 }
 
-function scheduleNotesUpdate() {
-  if (!notesAvailable || !openaiClient) {
-    return;
-  }
-  if (!transcriptState.text || !transcriptState.text.trim()) {
-    return;
-  }
-  if (noteUpdateScheduled) {
-    return;
-  }
-  noteUpdateScheduled = true;
-  setTimeout(async () => {
-    noteUpdateScheduled = false;
-    await updateNotes();
-  }, 1200);
-}
-
-async function updateNotes() {
-  if (!openaiClient || !notesAvailable) {
-    return;
-  }
-  const transcript = transcriptState;
-  if (!transcript.text?.trim()) {
-    notesState = { bullets: [], raw: '' };
-    pushNotes();
-    return;
-  }
-
-  mainWindow?.webContents.send('notes-status', 'generating');
-
-  const segmentLines = transcript.segments
-    .map((segment) => {
-      const time = formatTimestamp(segment.start, segment.end);
-      return `${time} ${segment.text}`.trim();
-    })
-    .join('\n');
-
-  const prompt = [
-    {
-      role: 'system',
-      content:
-        'You are a focused real-time note taker. Convert live transcript snippets into concise, chronological bullet notes that capture context, needs, comparisons, blockers, and next steps. Keep bullets short but information-rich.',
-    },
-    {
-      role: 'user',
-      content: `Live transcript so far:\n${segmentLines}\n\nReturn JSON with a \"bullets\" array ordered chronologically. Each bullet should be a standalone insight summarizing the preceding lines.`,
-    },
-  ];
-
-  try {
-    const response = await openaiClient.responses.create({
-      model: 'gpt-5-nano',
-      input: prompt,
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'chronological_notes',
-          schema: {
-            type: 'object',
-            properties: {
-              bullets: {
-                type: 'array',
-                items: {
-                  type: 'string',
-                },
-              },
-            },
-            required: ['bullets'],
-          },
-        },
-      },
-      max_output_tokens: 400,
-    });
-
-    const rawOutput = extractResponseText(response);
-    const bullets = parseNotesOutput(rawOutput);
-
-    notesState = { bullets, raw: rawOutput };
-    pushNotes();
-    mainWindow?.webContents.send('notes-status', 'ready');
-  } catch (error) {
-    console.error('Note generation failed', error);
-    mainWindow?.webContents.send('notes-status', 'error');
-    sendStatus(`note generation error: ${error.message}`);
-  }
-}
-
 function stopCliProcess() {
   if (cliProcess) {
     try {
@@ -342,20 +281,16 @@ function stopCliProcess() {
   }
   cliReady = false;
   stdoutBuffer = '';
-  noteUpdateScheduled = false;
 }
 
 function resetState() {
   transcriptState = { text: '', segments: [] };
-  notesState = { bullets: [], raw: '' };
+  paneManager.resetOutputs();
+  paneManager.setTranscript(transcriptState);
 }
 
 function pushTranscript() {
   mainWindow?.webContents.send('transcript-update', transcriptState);
-}
-
-function pushNotes() {
-  mainWindow?.webContents.send('notes-update', notesState);
 }
 
 function sendStatus(message) {
